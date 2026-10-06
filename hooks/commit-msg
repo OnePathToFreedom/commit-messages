@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# commit-msg hook — mechanical format check, tool-agnostic.
+#
+# This is a backstop, not the main enforcement mechanism: it only checks
+# that the message LOOKS like Conventional Commits (type(scope): subject).
+# It cannot check whether the message is actually true to the diff — that
+# requires judgment, which is what AGENTS.md / CLAUDE.md / SKILL.md are for.
+# Install: cp hooks/commit-msg <repo>/.git/hooks/commit-msg && chmod +x <repo>/.git/hooks/commit-msg
+
+set -euo pipefail
+
+msg_file="$1"
+subject="$(head -n1 "$msg_file")"
+
+# Skip merge commits, revert commits, fixup!/squash! (rebase will clean these up)
+if [[ "$subject" =~ ^(Merge|Revert|fixup!|squash!) ]]; then
+  exit 0
+fi
+
+type_re='^(feat|fix|refactor|perf|docs|style|test|chore|ci)(\([a-zA-Z0-9_./-]+\))?!?: .+'
+
+if [[ ! "$subject" =~ $type_re ]]; then
+  echo "commit-msg hook: subject line doesn't match Conventional Commits format." >&2
+  echo "  got:      $subject" >&2
+  echo "  expected: <type>(<scope>): <subject>   e.g. fix(auth): correct token expiry check" >&2
+  echo "  types:    feat fix refactor perf docs style test chore ci" >&2
+  echo "Bypass once with: git commit --no-verify" >&2
+  exit 1
+fi
+
+subject_len=${#subject}
+if (( subject_len > 72 )); then
+  echo "commit-msg hook: warning — subject line is $subject_len chars (soft limit ~72)." >&2
+  # Warning only, does not block the commit.
+fi
+
+line_count=$(wc -l < "$msg_file")
+if (( line_count < 3 )); then
+  echo "commit-msg hook: warning — no body found. Per AGENTS.md every commit should have" >&2
+  echo "  at least one bullet explaining what changed and why." >&2
+  # Warning only, does not block the commit — a human may have a good reason.
+fi
+
+exit 0
